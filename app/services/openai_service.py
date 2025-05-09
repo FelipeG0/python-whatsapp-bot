@@ -14,7 +14,7 @@ client = OpenAI(api_key=OPENAI_API_KEY)
 def upload_file(path):
     # Upload a file with an "assistants" purpose
     file = client.files.create(
-        file=open("../../data/airbnb-faq.pdf", "rb"), purpose="assistants"
+        file=open("../../data/faq.pdf", "rb"), purpose="assistants"
     )
 
 
@@ -23,8 +23,8 @@ def create_assistant(file):
     You currently cannot set the temperature for Assistant via the API.
     """
     assistant = client.beta.assistants.create(
-        name="WhatsApp AirBnb Assistant",
-        instructions="You're a helpful WhatsApp assistant that can assist guests that are staying in our Paris AirBnb. Use your knowledge base to best respond to customer queries. If you don't know the answer, say simply that you cannot help with question and advice to contact the host directly. Be friendly and funny.",
+        name="WhatsApp Murrah Assistant",
+        instructions="You're a helpful WhatsApp assistant that can assist clients that want to order in our restaurant Murrah. Use your knowledge base to best respond to customer queries. If you don't know the answer, say simply that you cannot help with question and advice to contact the host directly. Be friendly and funny.",
         tools=[{"type": "retrieval"}],
         model="gpt-4-1106-preview",
         file_ids=[file.id],
@@ -51,7 +51,7 @@ def run_assistant(thread, name):
     run = client.beta.threads.runs.create(
         thread_id=thread.id,
         assistant_id=assistant.id,
-        # instructions=f"You are having a conversation with {name}",
+        instructions=f"You are having a conversation with {name}",
     )
 
     # Wait for completion

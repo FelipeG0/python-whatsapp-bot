@@ -3,7 +3,7 @@ from flask import current_app, jsonify
 import json
 import requests
 
-# from app.services.openai_service import generate_response
+from app.services.openai_service import generate_response
 import re
 
 
@@ -24,11 +24,30 @@ def get_text_message_input(recipient, text):
         }
     )
 
-
+'''
 def generate_response(response):
-    # Return text in uppercase
+   # Return text in uppercase
     return response.upper()
+'''
 
+def cargar_menu_desde_txt():
+    """
+    Lee el contenido de un archivo .txt y lo retorna como un string.
+
+    Parámetros:
+    ruta_archivo (str): Ruta del archivo de texto.
+
+    Retorna:
+    str: Contenido del archivo.
+    """
+    try:
+        with open("app/utils/menu.txt", 'r', encoding='utf-8') as archivo:
+            contenido = archivo.read()
+        return contenido
+    except FileNotFoundError:
+        return "Error: El archivo no se encontró."
+    except Exception as e:
+        return f"Error al leer el archivo: {str(e)}"
 
 def send_message(data):
     headers = {
@@ -83,11 +102,12 @@ def process_whatsapp_message(body):
     message_body = message["text"]["body"]
 
     # TODO: implement custom function here
-    response = generate_response(message_body)
+    response = cargar_menu_desde_txt()
+    response = process_text_for_whatsapp(response)
 
     # OpenAI Integration
-    # response = generate_response(message_body, wa_id, name)
-    # response = process_text_for_whatsapp(response)
+    #response = generate_response(message_body, wa_id, name)
+    #response = process_text_for_whatsapp(response)
 
     data = get_text_message_input(current_app.config["RECIPIENT_WAID"], response)
     send_message(data)

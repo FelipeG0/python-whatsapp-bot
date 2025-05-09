@@ -40,9 +40,12 @@ def send_whatsapp_message():
 
 
 # Call the function
+'''
 response = send_whatsapp_message()
 print(response.status_code)
 print(response.json())
+'''
+
 
 # --------------------------------------------------------------
 # Send a custom text WhatsApp message
@@ -84,7 +87,10 @@ def send_message(data):
 
 
 data = get_text_message_input(
-    recipient=RECIPIENT_WAID, text="Hello, this is a test message."
+    recipient=RECIPIENT_WAID, text="¡Bienvenido a Murrah! " \
+    "Aquí las hamburguesas no son cualquier cosa... son totalmente carne de búfalo 🦬" \
+    "¿Antojo de algo diferente y brutalmente sabroso?" \
+    "🍔 Escríbenos y déjate tentar por el sabor salvaje."
 )
 
 response = send_message(data)
@@ -129,7 +135,7 @@ def get_text_message_input(recipient, text):
         }
     )
 
-
+'''
 data = get_text_message_input(
     recipient=RECIPIENT_WAID, text="Hello, this is a test message."
 )
@@ -137,3 +143,5 @@ data = get_text_message_input(
 loop = asyncio.get_event_loop()
 loop.run_until_complete(send_message(data))
 loop.close()
+'''
+
