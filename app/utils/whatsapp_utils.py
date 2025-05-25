@@ -13,16 +13,15 @@ def log_http_response(response):
     logging.info(f"Body: {response.text}")
 
 
-def get_text_message_input(recipient, text):
-    return json.dumps(
-        {
-            "messaging_product": "whatsapp",
-            "recipient_type": "individual",
-            "to": recipient,
-            "type": "text",
-            "text": {"preview_url": False, "body": text},
+def get_text_message_input(recipient, text="Hola"):
+    return {
+        "messaging_product": "whatsapp",
+        "to": recipient,
+        "type": "text",
+        "text": {
+            "body": text
         }
-    )
+    }
 
 '''
 def generate_response(response):
@@ -58,23 +57,28 @@ def send_message(data):
     url = f"https://graph.facebook.com/{current_app.config['VERSION']}/{current_app.config['PHONE_NUMBER_ID']}/messages"
 
     try:
+        # usamos json=data para que requests lo serialice correctamente
         response = requests.post(
-            url, data=data, headers=headers, timeout=10
-        )  # 10 seconds timeout as an example
-        response.raise_for_status()  # Raises an HTTPError if the HTTP request returned an unsuccessful status code
+            url,
+            json=data,
+            headers=headers,
+            timeout=10
+        )
+        response.raise_for_status()
     except requests.Timeout:
         logging.error("Timeout occurred while sending message")
         return jsonify({"status": "error", "message": "Request timed out"}), 408
-    except (
-        requests.RequestException
-    ) as e:  # This will catch any general request exception
+    except requests.RequestException as e:
         logging.error(f"Request failed due to: {e}")
+        if e.response is not None:
+            try:
+                logging.error(f"Meta response body: {e.response.text}")
+            except Exception as decode_error:
+                logging.error(f"Could not decode error body: {decode_error}")
         return jsonify({"status": "error", "message": "Failed to send message"}), 500
     else:
-        # Process the response as normal
         log_http_response(response)
         return response
-
 
 def process_text_for_whatsapp(text):
     # Remove brackets
@@ -108,8 +112,8 @@ def process_whatsapp_message(body):
     # OpenAI Integration
     response = generate_response(message_body, wa_id, name)
     response = process_text_for_whatsapp(response)
-
-    data = get_text_message_input(current_app.config["RECIPIENT_WAID"], response)
+    
+    data = get_text_message_input(wa_id, response)
     send_message(data)
 
 
