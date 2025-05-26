@@ -5,6 +5,7 @@ from dotenv import load_dotenv
 import os
 import time
 import logging
+import requests
 
 load_dotenv()
 OPENAI_API_KEY = os.getenv("OPENAI_API_KEY")
@@ -75,6 +76,7 @@ def run_assistant(thread, name):
             Ahora espera la respuesta del cliente.",
     )
 
+
     # Esperar la finalización
     while run.status != "completed":
         time.sleep(0.5)
@@ -107,15 +109,31 @@ def run_assistant(thread, name):
         # Persistir la confirmación del cliente
         marcar_confirmacion(thread.id, True)
 
+        import re
+
+        try:
+            # Buscar el bloque entre ```json y ```
+            match = re.search(r"```json\s*(\{.*?\})\s*```", new_message, re.DOTALL)
+            if match:
+                json_str = match.group(1)
+                comanda_extraida = json.loads(json_str)
+                estado_pedido[thread.id] = comanda_extraida["pedido"]
+                logging.info(f"✅ Pedido guardado para {thread.id}: {estado_pedido[thread.id]}")
+            else:
+                raise ValueError("No se encontró bloque JSON válido en el mensaje")
+        except Exception as e:
+            logging.error(f"❌ Error al extraer comanda JSON: {e}")
+            return "Hubo un error al procesar tu pedido. Por favor intenta nuevamente."
+        
         # Finalizar el pedido y generar el JSON
-        comanda_json = finalizar_pedido(thread.id)
+        comanda_json = finalizar_pedido(thread.id, name)
         logging.info(f"Comanda finalizada: {json.dumps(comanda_json, indent=4)}")
         estado_pedido[thread.id] = comanda_json
         response = f"Gracias por tu pedido, {name}. ¡Lo estamos procesando!"
 
     # Si el cliente no ha confirmado, pero la confirmación persiste (por si el servicio se cae)
     elif verificar_confirmacion(thread.id):
-        response = f"Tu pedido ya fue confirmado. Estamos procesando tu pedido."
+        response = "Tu pedido ya fue confirmado. Estamos procesando tu pedido."
 
     # Devolver la respuesta generada
     return response
@@ -152,7 +170,7 @@ def generate_response(message_body, wa_id, name):
 # Diccionario que almacena el pedido del cliente
 estado_pedido = {}
 
-def finalizar_pedido(wa_id):
+def finalizar_pedido(wa_id, name):
     """
     Función para finalizar el pedido del cliente y generar el JSON.
     """
@@ -162,12 +180,21 @@ def finalizar_pedido(wa_id):
 
     # Generamos el JSON de la comanda
     comanda_json = {
-        "cliente": wa_id,
+        "cliente": name,
         "pedido": estado_pedido[wa_id]
     }
 
-    logging.info(f"Comanda generada: {json.dumps(comanda_json, indent=4)}")
+    try:
+        response = requests.post("http://localhost:5001/comandas", json=comanda_json, timeout=5)
+        response.raise_for_status()
+        logging.info("✅ Comanda enviada correctamente.")
+    except requests.exceptions.RequestException as e:
+        logging.error(f"❌ Error al enviar comanda: {e}")
+        return None
+
+    logging.info(f"📦 Comanda generada:\n{json.dumps(comanda_json, indent=4)}")
     return comanda_json
+
 
 def agregar_producto_pedido(wa_id, producto, cantidad, precio):
     """
