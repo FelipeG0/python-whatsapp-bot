@@ -37,10 +37,11 @@ html_template = """
         <div class="card">
             <div class="cliente"><strong>👤 {{ comanda.cliente }}</strong></div>
             <div class="hora">🕒 {{ comanda.hora_pedido }}</div>
+            <div><strong>📍 Dirección:</strong> {{ comanda.direccion }}</div>
             <div><strong>📝 Pedido:</strong></div>
             <ul>
                 {% for item in comanda.pedido %}
-                <li>{{ item.cantidad }} x {{ item.producto }}</li>
+                <li>{{ item.producto }}</li>
                 {% endfor %}
             </ul>
         </div>

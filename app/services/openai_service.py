@@ -48,13 +48,11 @@ def store_thread(wa_id, thread_id):
 def run_assistant(thread, name):
     assistant = client.beta.assistants.retrieve(OPENAI_ASSISTANT_ID)
 
-    # Verificar si el menú ya ha sido enviado
     if verificar_menu_enviado(thread.id):
         menu_enviado = True
     else:
         menu_enviado = False
 
-    # Definir la estructura del JSON que debe ser devuelta cuando el cliente termine
     estructura_json = """
     {
         "cliente": "nombre_del_cliente",
@@ -63,81 +61,72 @@ def run_assistant(thread, name):
             {"producto": "nombre_del_producto", "cantidad": cantidad}
         ],
         "hora_pedido": "2025-10-01T12:00:00Z (aqui va la hora del pedido)",
+        "direccion": "direccion_del_cliente"
     }
     """
 
-    # Ejecutar el asistente
     run = client.beta.threads.runs.create(
         thread_id=thread.id,
         assistant_id=assistant.id,
         instructions=f"Estás teniendo una conversación con {name}. Primero espera a que se muestre el menú, y luego espera las instrucciones del cliente sobre su pedido. \
-            Y cuando el cliente diga explicitamente 'CONFIRMAR', pero tambien recuerdale que tiene que decir 'CONFIRMAR' para acabar el pedido, \
-            finaliza el pedido y manda el siguiente json y solo el json:\n {estructura_json}\
-            Ahora espera la respuesta del cliente.",
+Cuando ya tengas todas las instrucciones, por último pide la dirección de la vivienda para poder llevar el pedido. \
+Cuando el cliente diga explícitamente 'CONFIRMAR', recuérdale que debe decir 'CONFIRMAR' para finalizar. \
+Luego manda el siguiente JSON y solo el JSON:\n {estructura_json}\n\
+Ahora espera la respuesta del cliente.",
     )
 
-
-    # Esperar la finalización
     while run.status != "completed":
         time.sleep(0.5)
         run = client.beta.threads.runs.retrieve(thread_id=thread.id, run_id=run.id)
 
-    # Obtener los mensajes
     messages = client.beta.threads.messages.list(thread_id=thread.id)
     new_message = messages.data[0].content[0].text.value
     logging.info(f"Mensaje generado: {new_message}")
     response = new_message
 
-    # Si es la primera interacción y el menú aún no ha sido enviado
     if not menu_enviado:
-        # Cargar el menú desde el archivo o base de datos
-        menu = cargar_menu_desde_txt()  # Cargar el menú del archivo de texto
+        menu = cargar_menu_desde_txt()
         response = f"¡Hola {name}! ¡Bienvenido a Murrah! \nAquí está el menú: \n{menu}"
 
-        # Enviar el menú al cliente como el primer mensaje
-        message = client.beta.threads.messages.create(
+        client.beta.threads.messages.create(
             thread_id=thread.id,
             role="assistant",
             content=response,
         )
-
-        # Marcar que el menú ha sido enviado
         marcar_menu_enviado(thread.id)
 
-    # Si el cliente menciona que ha terminado el pedido
     elif "json" in new_message.lower():
-        # Persistir la confirmación del cliente
         marcar_confirmacion(thread.id, True)
-
         import re
 
         try:
-            # Buscar el bloque entre ```json y ```
             match = re.search(r"```json\s*(\{.*?\})\s*```", new_message, re.DOTALL)
             if match:
                 json_str = match.group(1)
                 comanda_extraida = json.loads(json_str)
-                estado_pedido[thread.id] = comanda_extraida["pedido"]
+
+                # Validación de llaves requeridas
+                required_keys = {"pedido", "direccion", "hora_pedido"}
+                if not required_keys.issubset(comanda_extraida.keys()):
+                    return "Faltan datos importantes para procesar tu pedido. Por favor asegúrate de incluir la dirección y la hora."
+
+                estado_pedido[thread.id] = comanda_extraida
                 logging.info(f"✅ Pedido guardado para {thread.id}: {estado_pedido[thread.id]}")
             else:
                 raise ValueError("No se encontró bloque JSON válido en el mensaje")
         except Exception as e:
             logging.error(f"❌ Error al extraer comanda JSON: {e}")
             return "Hubo un error al procesar tu pedido. Por favor intenta nuevamente."
-        
-        # Finalizar el pedido y generar el JSON
+
         comanda_json = finalizar_pedido(thread.id, name)
         logging.info(f"Comanda finalizada: {json.dumps(comanda_json, indent=4)}")
         estado_pedido[thread.id] = comanda_json
         response = f"Gracias por tu pedido, {name}. ¡Lo estamos procesando!"
 
-    # Si el cliente no ha confirmado, pero la confirmación persiste (por si el servicio se cae)
     elif verificar_confirmacion(thread.id):
         response = "Tu pedido ya fue confirmado. Estamos procesando tu pedido."
 
-    # Devolver la respuesta generada
     return response
-
 
 def generate_response(message_body, wa_id, name):
     # Check if there is already a thread_id for the wa_id
@@ -172,16 +161,19 @@ estado_pedido = {}
 
 def finalizar_pedido(wa_id, name):
     """
-    Función para finalizar el pedido del cliente y generar el JSON.
+    Función para finalizar el pedido del cliente y generar el JSON completo.
     """
     if wa_id not in estado_pedido:
         logging.warning(f"No hay pedido para {wa_id}")
         return None
 
-    # Generamos el JSON de la comanda
+    datos = estado_pedido[wa_id]
+
     comanda_json = {
         "cliente": name,
-        "pedido": estado_pedido[wa_id]
+        "pedido": datos["pedido"],
+        "direccion": datos["direccion"],
+        "hora_pedido": datos["hora_pedido"]
     }
 
     try:
@@ -194,7 +186,6 @@ def finalizar_pedido(wa_id, name):
 
     logging.info(f"📦 Comanda generada:\n{json.dumps(comanda_json, indent=4)}")
     return comanda_json
-
 
 def agregar_producto_pedido(wa_id, producto, cantidad, precio):
     """
